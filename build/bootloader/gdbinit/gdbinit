@@ -1,0 +1,2 @@
+source /home/tiago/Modelos/lora_received/build/bootloader/gdbinit/symbols
+source /home/tiago/Modelos/lora_received/build/bootloader/gdbinit/connect

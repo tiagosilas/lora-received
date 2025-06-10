@@ -1,0 +1,13 @@
+# Target labels
+ bootloader
+# Source files and their labels
+/home/tiago/Modelos/lora_received/build/CMakeFiles/bootloader
+/home/tiago/Modelos/lora_received/build/CMakeFiles/bootloader.rule
+/home/tiago/Modelos/lora_received/build/CMakeFiles/bootloader-complete.rule
+/home/tiago/Modelos/lora_received/build/bootloader-prefix/src/bootloader-stamp/bootloader-build.rule
+/home/tiago/Modelos/lora_received/build/bootloader-prefix/src/bootloader-stamp/bootloader-configure.rule
+/home/tiago/Modelos/lora_received/build/bootloader-prefix/src/bootloader-stamp/bootloader-download.rule
+/home/tiago/Modelos/lora_received/build/bootloader-prefix/src/bootloader-stamp/bootloader-install.rule
+/home/tiago/Modelos/lora_received/build/bootloader-prefix/src/bootloader-stamp/bootloader-mkdir.rule
+/home/tiago/Modelos/lora_received/build/bootloader-prefix/src/bootloader-stamp/bootloader-patch.rule
+/home/tiago/Modelos/lora_received/build/bootloader-prefix/src/bootloader-stamp/bootloader-update.rule

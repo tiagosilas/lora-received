@@ -1,0 +1,2 @@
+source /home/tiago/Modelos/lora_received/build/gdbinit/symbols
+source /home/tiago/Modelos/lora_received/build/gdbinit/connect
