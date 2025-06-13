@@ -32,5 +32,6 @@ float lora_packet_snr(void);
 void lora_close(void);
 int lora_initialized(void);
 void lora_dump_registers(void);
+void lora_config_modem(uint8_t bw, uint8_t cr, uint8_t sf);
 
 #endif

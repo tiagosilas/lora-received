@@ -256,6 +256,26 @@ lora_set_bandwidth(long sbw)
 }
 
 /**
+ * configure the modem
+ * @param bw bandwidth
+ * @param cr coding rate
+ * @param sf spreading factor
+ */
+void lora_config_modem(uint8_t bw, uint8_t cr, uint8_t sf)
+{
+    // REG_MODEM_CONFIG_1
+    // bw (bits 7-4), cr (bits 3-1)
+    uint8_t config1 = (bw << 4) | (cr << 1);
+    lora_write_reg(REG_MODEM_CONFIG_1, config1);
+
+    // REG_MODEM_CONFIG_2
+    // sf (bits 7-4), crc on (bit 2) - mantemos habilitado
+    uint8_t config2 = (sf << 4) | 0x04;
+    lora_write_reg(REG_MODEM_CONFIG_2, config2);
+}
+
+
+/**
  * Set coding rate 
  * @param denominator 5-8, Denominator for the coding rate 4/x
  */ 

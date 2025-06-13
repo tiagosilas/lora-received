@@ -1,4 +1,10 @@
 {
-    "idf.port": "/dev/ttyACM1",
-    "idf.flashType": "UART"
+    "idf.port": "/dev/ttyACM0",
+    "idf.flashType": "UART",
+    "idf.openOcdConfigs": [
+        "board/esp32-wrover-kit-3.3v.cfg"
+    ],
+    "idf.customExtraVars": {
+        "IDF_TARGET": "esp32"
+    }
 }
