@@ -1,0 +1,7 @@
+build
+.vscode
+managed_components
+docs/tests
+dependencies.lock
+c_cpp_properties.json
+settings.json
