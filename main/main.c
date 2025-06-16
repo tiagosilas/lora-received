@@ -10,6 +10,7 @@
 #include "nvs_flash.h"
 #include "mqtt_client.h"
 #include "lora.h" // Sua biblioteca LoRa
+#include "mbedtls/base64.h"
 
 // Configurações da rede Wi-Fi
 #define WIFI_SSID     "2G_AERIS"
@@ -26,6 +27,33 @@ uint8_t buf[64];
 esp_mqtt_client_handle_t client;
 
 static const char *TAG = "MAIN";
+
+/**
+ * @brief Decodifica uma string Base64 para bytes.
+ * @param out_buffer Buffer de saída (já alocado)
+ * @param in_str String Base64 de entrada
+ * @param out_len Tamanho do buffer de saída
+ * @return Número de bytes decodificados ou -1 se falhar
+ */
+int decode_base64(uint8_t *out_buffer, size_t out_len, const char *in_str)
+{
+    if (!in_str || !out_buffer) {
+        return -1;
+    }
+
+    size_t in_len = strlen(in_str);
+    size_t decoded_len = 0;
+
+    int ret = mbedtls_base64_decode(out_buffer, out_len, &decoded_len,
+                                     (const unsigned char *)in_str, in_len);
+
+    if (ret != 0) {
+        ESP_LOGE(TAG, "Falha na decodificação Base64 (erro: -0x%x)", -ret);
+        return -1;
+    }
+
+    return decoded_len;
+}
 
 // Manipulador de eventos de Wi-Fi
 static void wifi_event_handler(void* arg, esp_event_base_t event_base,
@@ -97,7 +125,7 @@ void mqtt_app_start(void)
 {
     esp_mqtt_client_config_t mqtt_cfg = {
         .broker.address.transport = MQTT_TRANSPORT_OVER_TCP,
-        .broker.address.hostname = "192.168.0.110",  // Altere conforme seu broker
+        .broker.address.hostname = "mqtt.aerisiot.com",  // Altere conforme seu broker
         .broker.address.port = 1883,
         .credentials.client_id = "esp32-lora-gateway",
     };
@@ -111,30 +139,71 @@ void mqtt_app_start(void)
     }
 }
 
-// Tarefa principal: escuta LoRa e envia os dados via MQTT
 void task_rx(void *p)
 {
+    uint8_t buf[64];         // Dados brutos recebidos
+    uint8_t decoded_buf[64]; // Onde vai ficar o payload decodificado
     int x;
+
     for (;;) {
-        lora_receive(); // Coloca o módulo LoRa em modo de recepção
+        lora_receive(); // Coloca o rádio em modo RX
 
         while (lora_received()) {
-            x = lora_receive_packet(buf, sizeof(buf) - 1); // Deixa espaço para '\0'
-            buf[x] = '\0'; // Finaliza como string
+            x = lora_receive_packet(buf, sizeof(buf));
 
-            ESP_LOGI(TAG, "Pacote recebido: %s", buf);
+            if (x > 0) {
+                buf[x] = '\0'; // Finaliza como string para Base64
+                ESP_LOGI(TAG, "Dados brutos recebidos: %s", buf);
+                ESP_LOG_BUFFER_HEX(TAG, buf, x);
 
-            // Publica no tópico MQTT
-            if (client != NULL) {
-                esp_mqtt_client_publish(client, "lora/data", (char*)buf, x, 1, 0);
+                // Tenta decodificar Base64
+                int decoded_len = decode_base64(decoded_buf, sizeof(decoded_buf), (char*)buf);
+                if (decoded_len > 0) {
+                    decoded_buf[decoded_len] = '\0';
+                    ESP_LOGI(TAG, "Dados decodificados: %s", decoded_buf);
+
+                    // Publica no MQTT
+                    if (client != NULL) {
+                        esp_mqtt_client_publish(client, "lora/data", (char*)decoded_buf, decoded_len, 1, 0);
+                    }
+                } else {
+                    ESP_LOGW(TAG, "Não foi possível decodificar Base64");
+                }
+            } else {
+                ESP_LOGW(TAG, "Nenhum dado válido recebido");
             }
 
-            vTaskDelay(500 / portTICK_PERIOD_MS); // Pequeno delay
+            vTaskDelay(500 / portTICK_PERIOD_MS);
         }
 
         vTaskDelay(10 / portTICK_PERIOD_MS);
     }
 }
+
+// // Tarefa principal: escuta LoRa e envia os dados via MQTT
+// void task_rx(void *p)
+// {
+//     int x;
+//     for (;;) {
+//         lora_receive(); // Coloca o módulo LoRa em modo de recepção
+
+//         while (lora_received()) {
+//             x = lora_receive_packet(buf, sizeof(buf) - 1); // Deixa espaço para '\0'
+//             buf[x] = '\0'; // Finaliza como string
+
+//             ESP_LOGI(TAG, "Pacote recebido: %s", buf);
+
+//             // Publica no tópico MQTT
+//             if (client != NULL) {
+//                 esp_mqtt_client_publish(client, "lora/data", (char*)buf, x, 1, 0);
+//             }
+
+//             vTaskDelay(500 / portTICK_PERIOD_MS); // Pequeno delay
+//         }
+
+//         vTaskDelay(10 / portTICK_PERIOD_MS);
+//     }
+// }
 
 // Função principal
 void app_main()
@@ -150,7 +219,12 @@ void app_main()
 
     // Inicializar LoRa
     lora_init();
-    lora_set_frequency(915e6); // Ajuste a frequência conforme necessário
+    lora_set_frequency(915e6);
+    lora_set_bandwidth(125e3);
+    lora_set_spreading_factor(12);
+    lora_set_coding_rate(5); // 4/5
+    lora_explicit_header_mode();
+    lora_disable_crc();
     ESP_LOGI(TAG, "LoRa inicializado");
 
     // Inicializar Wi-Fi

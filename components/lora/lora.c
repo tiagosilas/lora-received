@@ -6,6 +6,7 @@
 #include "driver/gpio.h"
 #include <string.h>
 #include "lora.h"
+#include "esp_log.h"
 
 /*
  * Register definitions
@@ -69,6 +70,9 @@ static spi_device_handle_t __spi;
 
 static int __implicit;
 static long __frequency;
+
+static const char *TAG = "LoRa";
+
 
 /**
  * Write a value to a register.
@@ -432,35 +436,70 @@ lora_send_packet(uint8_t *buf, int size)
  * @param size Available size in buffer (bytes).
  * @return Number of bytes received (zero if no packet available).
  */
-int 
-lora_receive_packet(uint8_t *buf, int size)
+int lora_receive_packet(uint8_t *buf, int size)
 {
-   int len = 0;
+    int len = 0;
 
-   /*
-    * Check interrupts.
-    */
-   int irq = lora_read_reg(REG_IRQ_FLAGS);
-   lora_write_reg(REG_IRQ_FLAGS, irq);
-   if((irq & IRQ_RX_DONE_MASK) == 0) return 0;
-   if(irq & IRQ_PAYLOAD_CRC_ERROR_MASK) return 0;
+    int irq = lora_read_reg(REG_IRQ_FLAGS);
+    lora_write_reg(REG_IRQ_FLAGS, irq); // Limpa os flags após leitura
 
-   /*
-    * Find packet size.
-    */
-   if (__implicit) len = lora_read_reg(REG_PAYLOAD_LENGTH);
-   else len = lora_read_reg(REG_RX_NB_BYTES);
+    ESP_LOGD(TAG, "IRQ Flags: 0x%02X", irq);
 
-   /*
-    * Transfer data from radio.
-    */
-   lora_idle();   
-   lora_write_reg(REG_FIFO_ADDR_PTR, lora_read_reg(REG_FIFO_RX_CURRENT_ADDR));
-   if(len > size) len = size;
-   for(int i=0; i<len; i++) 
-      *buf++ = lora_read_reg(REG_FIFO);
+    if ((irq & IRQ_RX_DONE_MASK) == 0) {
+        ESP_LOGD(TAG, "Pacote não concluído (RX_DONE não ativo)");
+        return 0;
+    }
 
-   return len;
+    #if 0
+    if (irq & IRQ_PAYLOAD_CRC_ERROR_MASK) {
+        ESP_LOGW(TAG, "Erro de CRC no pacote recebido");
+        return 0;
+    }
+    #endif
+
+    if (__implicit) {
+        len = lora_read_reg(REG_PAYLOAD_LENGTH);
+        ESP_LOGI(TAG, "Modo Implícito - Payload Length fixo: %d", len);
+    } else {
+        len = lora_read_reg(REG_RX_NB_BYTES);
+        ESP_LOGI(TAG, "Modo Explícito - Número de bytes recebidos: %d", len);
+    }
+
+    if (len <= 0 || len > size) {
+        ESP_LOGW(TAG, "Tamanho do payload inválido ou maior que o buffer: %d", len);
+        return 0;
+    }
+
+    lora_idle();
+
+    uint8_t current_addr = lora_read_reg(REG_FIFO_RX_CURRENT_ADDR);
+    lora_write_reg(REG_FIFO_ADDR_PTR, current_addr);
+    ESP_LOGD(TAG, "FIFO_ADDR_PTR definido para: 0x%02X", current_addr);
+
+    for (int i = 0; i < len; i++) {
+        buf[i] = lora_read_reg(REG_FIFO);
+    }
+
+    ESP_LOGI(TAG, "Pacote recebido com sucesso (%d bytes)", len);
+    ESP_LOG_BUFFER_HEX(TAG, buf, len);
+
+    // Verifica se é ASCII imprimível
+    bool is_ascii = true;
+    for (int i = 0; i < len; i++) {
+        if (buf[i] < 0x20 || buf[i] > 0x7E) {
+            is_ascii = false;
+            break;
+        }
+    }
+
+    if (is_ascii) {
+        buf[len] = '\0'; // Finaliza como string
+        ESP_LOGI(TAG, "Conteúdo ASCII: %s", buf);
+    } else {
+        ESP_LOGI(TAG, "Conteúdo binário detectado");
+    }
+
+    return len;
 }
 
 /**
